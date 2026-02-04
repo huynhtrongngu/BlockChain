@@ -13,7 +13,6 @@ const RegisterAsset = ({ contract, account }) => {
     code: "",
     value: "",
     description: "", // Thêm trường mô tả
-    ipfs: "",
   });
   const [files, setFiles] = useState([]); // State lưu danh sách file
   const [status, setStatus] = useState({ type: "", message: "" });
@@ -79,47 +78,45 @@ const RegisterAsset = ({ contract, account }) => {
       setIsLoading(true);
       setStatus({ type: "loading", message: "Đang xử lý..." });
 
-      let tokenURI = formData.ipfs;
+      if (files.length === 0) {
+        throw new Error("Vui lòng chọn ít nhất 1 file hồ sơ!");
+      }
 
       // 1. Upload Loop (Duyệt qua danh sách file và upload từng cái)
       const uploadedDocs = [];
       let mainImageHash = "";
 
-      if (files.length > 0) {
-        setStatus({
-          type: "loading",
-          message: `Đang upload ${files.length} hồ sơ lên IPFS...`,
+      setStatus({
+        type: "loading",
+        message: `Đang upload ${files.length} hồ sơ lên IPFS...`,
+      });
+
+      for (let i = 0; i < files.length; i++) {
+        const hash = await uploadToIPFS(files[i]);
+        uploadedDocs.push({
+          name: files[i].name,
+          url: `https://gateway.pinata.cloud/ipfs/${hash}`,
+          type: files[i].type,
         });
 
-        for (let i = 0; i < files.length; i++) {
-          const hash = await uploadToIPFS(files[i]);
-          uploadedDocs.push({
-            name: files[i].name,
-            url: `https://gateway.pinata.cloud/ipfs/${hash}`,
-            type: files[i].type,
-          });
-
-          // Lấy file đầu tiên làm ảnh đại diện
-          if (i === 0) mainImageHash = hash;
-        }
-
-        // 2. Upload Metadata (Chứa Mô tả + Image Hash + Danh sách Files)
-        setStatus({
-          type: "loading",
-          message: "Đang tạo Metadata chuẩn NFT...",
-        });
-        tokenURI = await uploadMetadataToIPFS(
-          formData.code,
-          formData.description,
-          mainImageHash,
-          uploadedDocs,
-          formData.type, // Truyền loại tài sản vào hàm tạo metadata
-        );
-
-        console.log("Metadata Hash:", tokenURI);
-      } else if (!tokenURI) {
-        throw new Error("Vui lòng chọn ít nhất 1 file hồ sơ!");
+        // Lấy file đầu tiên làm ảnh đại diện
+        if (i === 0) mainImageHash = hash;
       }
+
+      // 2. Upload Metadata (Chứa Mô tả + Image Hash + Danh sách Files)
+      setStatus({
+        type: "loading",
+        message: "Đang tạo Metadata chuẩn NFT...",
+      });
+      const tokenURI = await uploadMetadataToIPFS(
+        formData.code,
+        formData.description,
+        mainImageHash,
+        uploadedDocs,
+        formData.type, // Truyền loại tài sản vào hàm tạo metadata
+      );
+
+      console.log("Metadata Hash:", tokenURI);
 
       // 3. Ghi vào Blockchain (Lưu Metadata Hash)
       setStatus({
@@ -151,7 +148,6 @@ const RegisterAsset = ({ contract, account }) => {
         value: "",
         description: "",
         type: "Bất động sản",
-        ipfs: "",
       });
       setFiles([]);
     } catch (error) {
@@ -169,8 +165,6 @@ const RegisterAsset = ({ contract, account }) => {
   const handleFileChange = (e) => {
     if (e.target.files) {
       setFiles(Array.from(e.target.files));
-      // Xóa text input ipfs nếu chọn file để tránh nhầm lẫn
-      setFormData((prev) => ({ ...prev, ipfs: "" }));
     }
   };
 
@@ -247,7 +241,6 @@ const RegisterAsset = ({ contract, account }) => {
         >
           <label className="form-label">Hồ sơ pháp lý (Sổ đỏ/Hợp đồng)</label>
 
-          {/* Tùy chọn 1: Upload File */}
           <input
             type="file"
             multiple // Cho phép chọn nhiều file
@@ -262,24 +255,6 @@ const RegisterAsset = ({ contract, account }) => {
               Đã chọn: {files.length} file
             </p>
           )}
-
-          <div
-            style={{ textAlign: "center", margin: "0.5rem 0", color: "#888" }}
-          >
-            - HOẶC -
-          </div>
-
-          {/* Tùy chọn 2: Nhập Hash thủ công (nếu đã có) */}
-          <input
-            className="form-input"
-            type="text"
-            placeholder="Nhập mã IPFS Hash thủ công (nếu có)"
-            value={formData.ipfs}
-            onChange={(e) => {
-              setFormData({ ...formData, ipfs: e.target.value });
-              setFiles([]); // Bỏ file nếu nhập tay
-            }}
-          />
         </div>
 
         <button

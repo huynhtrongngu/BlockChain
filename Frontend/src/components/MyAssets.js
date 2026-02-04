@@ -287,7 +287,7 @@ const MyAssets = ({ contract, account }) => {
 
   return (
     <div className="">
-      <h2 style={{ color: "#fff" }}>Ví Tài Sản NFT Của Tôi</h2>
+      <h2 className="page-title">Ví Tài Sản NFT Của Tôi</h2>
 
       {status.message && (
         <div className={`status-box ${status.type}`}>{status.message}</div>
