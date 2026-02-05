@@ -16,10 +16,22 @@ app.use(
 );
 app.use(express.json());
 
+/**
+ * Healthcheck: dùng để kiểm tra backend có đang chạy hay không.
+ * Không truy cập DB.
+ */
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
+/**
+ * Chuẩn hoá địa chỉ ví EVM để:
+ * - đảm bảo lưu/tra cứu DB theo 1 chuẩn (lowercase)
+ * - chặn input sai định dạng (tránh query/insert rác)
+ *
+ * @param {unknown} raw
+ * @returns {string | null} địa chỉ ví chuẩn hoá (lowercase) hoặc null nếu không hợp lệ
+ */
 function normalizeDiaChiVi(raw) {
   if (!raw) return null;
   const diaChiVi = String(raw).trim().toLowerCase();
@@ -27,7 +39,12 @@ function normalizeDiaChiVi(raw) {
   return diaChiVi;
 }
 
-// Lấy profile theo địa chỉ ví
+/**
+ * API: Lấy profile theo địa chỉ ví (định danh web3).
+ *
+ * Luồng dữ liệu:
+ * FE -> GET /api/profile/:dia_chi_vi -> normalize -> MongoDB findOne -> trả JSON.
+ */
 app.get("/api/profile/:dia_chi_vi", async (req, res) => {
   try {
     const diaChiVi = normalizeDiaChiVi(req.params.dia_chi_vi);
@@ -42,7 +59,17 @@ app.get("/api/profile/:dia_chi_vi", async (req, res) => {
   }
 });
 
-// Tạo/cập nhật profile (demo). Thực tế nên yêu cầu user ký message để xác thực.
+/**
+ * API: Tạo/cập nhật profile (upsert) theo địa chỉ ví.
+ *
+ * Luồng dữ liệu:
+ * FE -> PUT /api/profile/:dia_chi_vi (body) -> normalize ->
+ * - build $set/$unset ("" hoặc null sẽ xoá field)
+ * - findOneAndUpdate(upsert) -> trả JSON.
+ *
+ * Lưu ý: Đây là bản demo. Thực tế nên xác thực bằng chữ ký ví (signed message)
+ * trước khi cho phép cập nhật hồ sơ.
+ */
 app.put("/api/profile/:dia_chi_vi", async (req, res) => {
   try {
     const diaChiVi = normalizeDiaChiVi(req.params.dia_chi_vi);
@@ -97,6 +124,11 @@ app.put("/api/profile/:dia_chi_vi", async (req, res) => {
   }
 });
 
+/**
+ * Hàm main để:
+ * - kết nối MongoDB
+ * - start HTTP server
+ */
 async function main() {
   const mongoUri =
     process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/blockchain_assets";

@@ -15,24 +15,38 @@ const MyAssets = ({ contract, account }) => {
   const [editingStatusId, setEditingStatusId] = useState(null); // ID tài sản đang sửa trạng thái
   const [newStatusIndex, setNewStatusIndex] = useState(0);
 
-  // Helper: Chuyển đổi mã trạng thái
+  /**
+   * Helper: chuyển status index (0..3) từ contract -> text hiển thị.
+   */
   const getStatusText = (index) => {
     const statuses = ["Đang sử dụng", "Bảo trì", "Ngưng sử dụng", "Thanh lý"];
     return statuses[index] || "Không xác định";
   };
 
+  /**
+   * Helper: map status index -> màu badge UI.
+   */
   const getStatusColor = (index) => {
     const colors = ["#4CAF50", "#FFC107", "#FF5722", "#9E9E9E"]; // Green, Amber, Deep Orange, Grey
     return colors[index] || "#000";
   };
 
-  // Load danh sách NFT của user khi component được mount
+  /**
+   * Tự động tải danh sách tài sản khi có `contract` và `account`.
+   */
   useEffect(() => {
     if (contract && account) {
       loadMyAssets();
     }
   }, [contract, account]);
 
+  /**
+   * Load danh sách NFT của ví hiện tại.
+   *
+   * Luồng dữ liệu:
+   * - On-chain: getAssetsByOwner -> assetCodes/assetValues/assetStatuses/tokenURI
+   * - Off-chain: tokenURI -> fetch metadata JSON từ IPFS gateway -> image/description/documents/type
+   */
   const loadMyAssets = async () => {
     try {
       setIsLoading(true);
@@ -108,7 +122,14 @@ const MyAssets = ({ contract, account }) => {
     }
   };
 
-  // --- LOGIC XEM LỊCH SỬ ---
+  /**
+   * Xem lịch sử vòng đời tài sản dựa trên event logs.
+   *
+   * Luồng dữ liệu:
+   * - Query logs: AssetMinted / AssetStatusUpdated / AssetTransferred
+   * - Chunk theo block range để tránh giới hạn RPC eth_getLogs
+   * - Chuẩn hoá + sort để hiển thị timeline
+   */
   const handleViewHistory = async (tokenId) => {
     try {
       if (!contract) {
@@ -222,7 +243,14 @@ const MyAssets = ({ contract, account }) => {
     }
   };
 
-  // --- LOGIC CẬP NHẬT TRẠNG THÁI ---
+  /**
+   * Cập nhật trạng thái vòng đời của tài sản.
+   *
+   * Luồng dữ liệu:
+   * UI chọn status (0..3) -> gọi tx `updateAssetStatus(tokenId, statusIndex)` -> chờ mined -> reload danh sách.
+   *
+   * Lưu ý: Contract chỉ cho phép CHỦ SỞ HỮU token cập nhật trạng thái.
+   */
   const handleUpdateStatus = async () => {
     if (!editingStatusId) return;
     try {
@@ -249,6 +277,12 @@ const MyAssets = ({ contract, account }) => {
     }
   };
 
+  /**
+   * Chuyển nhượng NFT (quyền sở hữu token).
+   *
+   * Luồng dữ liệu:
+   * UI nhập địa chỉ nhận -> gọi tx `transferAsset(to, tokenId)` -> chờ mined -> reload danh sách.
+   */
   const handleTransfer = async (e) => {
     e.preventDefault();
     if (!contract) return alert("Vui lòng kết nối ví!");

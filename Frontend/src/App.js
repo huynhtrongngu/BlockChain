@@ -29,11 +29,22 @@ function App() {
   const [account, setAccount] = useState(null);
   const [contract, setContract] = useState(null);
 
+  /**
+   * Ngắt kết nối ở mức UI (reset state).
+   * Lưu ý: MetaMask không có API “disconnect” thật sự; app chỉ xoá state local.
+   */
   const disconnectWallet = () => {
     setAccount(null);
     setContract(null);
   };
 
+  /**
+   * Đảm bảo user đang ở đúng network (Cronos Testnet) trước khi gọi contract.
+   * Luồng:
+   * - đọc chainId -> nếu sai thì switch -> nếu chưa có chain thì add chain.
+   *
+   * @param {ethers.BrowserProvider} provider
+   */
   const ensureExpectedNetwork = async (provider) => {
     const network = await provider.getNetwork();
     if (network.chainId === EXPECTED_CHAIN_ID) return;
@@ -60,7 +71,13 @@ function App() {
     }
   };
 
-  // 1. Kết nối ví Metamask
+  /**
+   * Kết nối MetaMask và khởi tạo contract.
+   *
+   * Luồng dữ liệu:
+   * UI -> MetaMask (provider/signer) -> kiểm tra network -> kiểm tra code tại address ->
+   * tạo ethers.Contract -> setState(account/contract).
+   */
   const connectWallet = async () => {
     if (window.ethereum) {
       try {
@@ -101,6 +118,11 @@ function App() {
   useEffect(() => {
     if (!window.ethereum) return;
 
+    /**
+     * Khi user đổi account trong MetaMask:
+     * - reset state để tránh signer/contract bị lệch
+     * - user bấm kết nối lại để tạo signer/contract mới
+     */
     const handleAccountsChanged = (accounts) => {
       if (!accounts || accounts.length === 0) {
         disconnectWallet();
@@ -113,6 +135,10 @@ function App() {
 
     window.ethereum.on("accountsChanged", handleAccountsChanged);
 
+    /**
+     * Khi user đổi chain/network trong MetaMask:
+     * - reset state để tránh gọi contract sai chain
+     */
     const handleChainChanged = () => {
       // Chain changed: force app state reset to avoid stale provider/contract
       disconnectWallet();

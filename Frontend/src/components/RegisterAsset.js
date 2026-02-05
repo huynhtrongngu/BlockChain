@@ -18,7 +18,12 @@ const RegisterAsset = ({ contract, account }) => {
   const [status, setStatus] = useState({ type: "", message: "" });
   const [isLoading, setIsLoading] = useState(false);
 
-  // Hàm upload file lên Pinata
+  /**
+   * Upload 1 file hồ sơ lên Pinata (IPFS pin).
+   *
+   * Input: File người dùng chọn.
+   * Output: IpfsHash (chuỗi hash) để tạo URL gateway hoặc nhét vào metadata.
+   */
   const uploadToIPFS = async (fileToUpload) => {
     const url = `https://api.pinata.cloud/pinning/pinFileToIPFS`;
 
@@ -37,7 +42,17 @@ const RegisterAsset = ({ contract, account }) => {
     return res.data.IpfsHash;
   };
 
-  // Hàm upload JSON Metadata lên Pinata
+  /**
+   * Upload metadata JSON chuẩn NFT lên Pinata.
+   *
+   * Metadata chứa:
+   * - name/description
+   * - image: gateway URL của file đầu tiên
+   * - documents: danh sách giấy tờ đính kèm
+   * - attributes: Type, Created Date
+   *
+   * Output: IpfsHash của metadata JSON.
+   */
   const uploadMetadataToIPFS = async (
     name,
     description,
@@ -70,6 +85,12 @@ const RegisterAsset = ({ contract, account }) => {
     return res.data.IpfsHash;
   };
 
+  /**
+   * Chức năng “Đăng ký tài sản” end-to-end:
+   * 1) Upload nhiều file lên IPFS (Pinata)
+   * 2) Tạo metadata JSON và upload lên IPFS
+   * 3) Gọi smart contract `registerAsset(...)` để mint NFT
+   */
   const handleRegister = async (e) => {
     e.preventDefault();
     if (!contract) return alert("Vui lòng kết nối ví trước!");
@@ -161,7 +182,9 @@ const RegisterAsset = ({ contract, account }) => {
     }
   };
 
-  // Xử lý khi chọn file
+  /**
+   * Nhận danh sách file người dùng chọn (multi-file) và lưu vào state.
+   */
   const handleFileChange = (e) => {
     if (e.target.files) {
       setFiles(Array.from(e.target.files));

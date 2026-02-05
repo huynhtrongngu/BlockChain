@@ -14,12 +14,20 @@ const Profile = ({ account }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState({ type: "", message: "" });
 
+  /**
+   * Rút gọn địa chỉ ví để hiển thị UI.
+   */
   const shortAccount = useMemo(() => {
     if (!account) return "";
     return `${account.slice(0, 6)}...${account.slice(-4)}`;
   }, [account]);
 
   useEffect(() => {
+    /**
+     * Load profile từ Backend theo địa chỉ ví.
+     * - 200: set form theo dữ liệu
+     * - 404: coi như chưa có profile, cho phép tạo mới
+     */
     const run = async () => {
       if (!account) return;
 
@@ -61,11 +69,18 @@ const Profile = ({ account }) => {
     run();
   }, [account]);
 
+  /**
+   * Cập nhật state form khi user nhập.
+   */
   const onChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  /**
+   * Lưu profile: gọi API upsert.
+   * Quy ước: để trống "" sẽ được backend hiểu là xoá field (unset).
+   */
   const onSubmit = async (e) => {
     e.preventDefault();
     if (!account) {

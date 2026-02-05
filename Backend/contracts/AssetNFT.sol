@@ -5,33 +5,53 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+/// @title AssetNFT - NFT đại diện tài sản (ERC-721)
+/// @notice Contract demo để đăng ký tài sản bằng NFT, lưu hồ sơ ở IPFS (tokenURI), và truy xuất lịch sử qua event logs.
+/// @dev Frontend gọi các hàm view để đọc state và gọi các hàm write để tạo/chuyển/đổi trạng thái.
 contract AssetNFT is ERC721URIStorage, Ownable {
+    /// @dev TokenId kế tiếp sẽ được mint. TokenId bắt đầu từ 0.
     uint256 private _nextTokenId;
 
-    // Định nghĩa các trạng thái tài sản
+    /// @notice Trạng thái vòng đời tài sản.
+    /// @dev FE map index -> text: 0 Active, 1 Maintenance, 2 Retired, 3 Liquidated.
     enum AssetStatus { Active, Maintenance, Retired, Liquidated }
 
-    // Lưu trạng thái của từng tài sản
+    /// @notice Trạng thái của tokenId.
+    /// @dev Lưu on-chain để thống kê và kiểm soát vòng đời.
     mapping(uint256 => AssetStatus) public assetStatuses;
     
-    // Lưu giá trị định giá của từng tài sản (TokenId => Giá trị VNĐ)
+    /// @notice Giá trị khai báo/định giá của tài sản theo VNĐ.
+    /// @dev Đơn vị do hệ thống quy ước; contract không áp đặt decimal hay kiểm toán.
     mapping(uint256 => uint256) public assetValues;
     
-    // Lưu Mã tài sản (TokenId => AssetCode ví dụ "NHA-001")
+    /// @notice Mã tài sản theo tokenId (VD: "ASSET-2024-001").
     mapping(uint256 => string) public assetCodes;
 
-    // Events phục vụ truy xuất nguồn gốc (History)
+    /// @notice Event tạo tài sản (mint).
+    /// @dev Dùng để dựng lịch sử trong FE qua query logs.
     event AssetMinted(uint256 indexed tokenId, address owner, string assetCode, uint256 value);
+
+    /// @notice Event cập nhật trạng thái vòng đời.
+    /// @dev `timestamp` dùng block.timestamp lúc update.
     event AssetStatusUpdated(uint256 indexed tokenId, AssetStatus status, address updatedBy, uint256 timestamp);
+
+    /// @notice Event chuyển nhượng quyền sở hữu.
+    /// @dev FE dùng event này để dựng timeline chuyển quyền.
     event AssetTransferred(uint256 indexed tokenId, address from, address to, uint256 timestamp);
 
     constructor() ERC721("VietnamRealEstate", "VRE") Ownable(msg.sender) {}
 
-    // Chức năng 1: Đăng ký tài sản mới (Mint NFT)
-    // - to: Địa chỉ người nhận
-    // - assetCode: Mã tài sản (VD: NHA-HN-01)
-    // - tokenURI: Link IPFS chứa hồ sơ
-    // - value: Giá trị tài sản
+    /// @notice Đăng ký tài sản mới (mint NFT).
+    /// @dev Luồng dữ liệu điển hình:
+    /// 1) FE upload hồ sơ lên IPFS/Pinata -> nhận `metadataHash`
+    /// 2) FE gọi `registerAsset(to, assetCode, metadataHash, value)`
+    /// 3) Contract mint token và set `tokenURI(tokenId) = metadataHash`
+    ///
+    /// @param to Địa chỉ nhận token (thường là ví người dùng đang kết nối)
+    /// @param assetCode Mã tài sản (chuỗi do hệ thống đặt)
+    /// @param tokenURI Trong dự án này thường là IPFS hash của metadata JSON
+    /// @param value Giá trị khai báo (VNĐ)
+    /// @return tokenId TokenId vừa mint
     function registerAsset(address to, string memory assetCode, string memory tokenURI, uint256 value)
         public
         // onlyOwner // Bỏ comment dòng này nếu chỉ muốn Admin được quyền tạo tài sản
@@ -53,7 +73,11 @@ contract AssetNFT is ERC721URIStorage, Ownable {
         return tokenId;
     }
 
-    // Chức năng 2: Chuyển nhượng (Đơn giản hóa cho Frontend gọi)
+    /// @notice Chuyển nhượng tài sản (transfer NFT).
+    /// @dev Wrapper đơn giản để FE gọi thay vì dùng thẳng `safeTransferFrom`.
+    ///      OpenZeppelin sẽ kiểm tra quyền: msg.sender phải là owner hoặc được approve.
+    /// @param to Ví nhận token
+    /// @param tokenId Token cần chuyển
     function transferAsset(address to, uint256 tokenId) public {
         // Hàm safeTransferFrom của OpenZeppelin tự kiểm tra msg.sender có phải là chủ sở hữu k
         safeTransferFrom(msg.sender, to, tokenId);
@@ -62,7 +86,10 @@ contract AssetNFT is ERC721URIStorage, Ownable {
         emit AssetTransferred(tokenId, msg.sender, to, block.timestamp);
     }
 
-    // Chức năng 3: Cập nhật trạng thái tài sản
+    /// @notice Cập nhật trạng thái vòng đời tài sản.
+    /// @dev Chỉ chủ sở hữu token được phép cập nhật.
+    /// @param tokenId Token cần đổi trạng thái
+    /// @param _statusIndex Index trạng thái (0..3)
     function updateAssetStatus(uint256 tokenId, uint8 _statusIndex) public {
         require(ownerOf(tokenId) == msg.sender, "Khong phai chu so huu");
         require(_statusIndex <= 3, "Trang thai khong hop le");
@@ -73,7 +100,12 @@ contract AssetNFT is ERC721URIStorage, Ownable {
         emit AssetStatusUpdated(tokenId, newStatus, msg.sender, block.timestamp);
     }
     
-    // Chức năng 4: Lấy danh sách tài sản của một người
+    /// @notice Lấy danh sách tokenId đang thuộc về một owner.
+    /// @dev Hàm view, FE gọi bằng eth_call (không tốn gas cho người dùng).
+    ///      Nhưng RPC vẫn phải thực thi tính toán; token nhiều sẽ chậm.
+    ///      Cách làm demo: duyệt tuyến tính 0.._nextTokenId-1.
+    /// @param owner Địa chỉ ví cần truy vấn
+    /// @return result Mảng tokenId thuộc owner
     function getAssetsByOwner(address owner) public view returns (uint256[] memory) {
         uint256 balance = balanceOf(owner);
         uint256[] memory result = new uint256[](balance);
